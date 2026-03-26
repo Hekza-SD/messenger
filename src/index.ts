@@ -13,11 +13,14 @@ async function bootstrap() {
         process.exit(1);
     }
 
-    process.on('SIGINT', async () => {
+    const shutdownHandler = async () => {
         pinoLogger.warn('Shutting down gracefully...');
         await app.shutdown();
         process.exit(0);
-    });
+    };
+
+    process.on('SIGINT', shutdownHandler);
+    process.on('SIGTERM', shutdownHandler);
 }
 
 // apiBootstrap();

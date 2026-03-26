@@ -2,22 +2,19 @@ import { WorkerConfig } from '@prisma/client';
 import { BaseWorker } from './base-worker';
 import { GenericBullWorker } from './generic-bullmq-worker';
 
-const workerClasses = (): (new (...args: any[]) => BaseWorker)[] => [
-    GenericBullWorker,
-];
-
 export class WorkerFactory {
+    private static registry = new Map<
+        string,
+        new (config: WorkerConfig) => BaseWorker
+    >([['generic-bull-worker', GenericBullWorker]]);
+
     static create(config: WorkerConfig): BaseWorker {
-        const workers: BaseWorker[] = workerClasses().map(
-            (WorkerClass) => new WorkerClass(config),
-        );
+        const WorkerClass = this.registry.get(config.workerImplId);
 
-        const found = workers.find((p) => p.id === config.workerImplId);
-
-        if (!found) {
-            throw new Error(`Unknown worker: ${config.workerConfigId}`);
+        if (!WorkerClass) {
+            throw new Error(`Unknown worker implementation: ${config.workerImplId}`);
         }
 
-        return found;
+        return new WorkerClass(config);
     }
 }

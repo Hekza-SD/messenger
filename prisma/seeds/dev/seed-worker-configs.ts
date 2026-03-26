@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 export async function seedWorkersConfigs(prisma: PrismaClient) {
     console.log('Seeding worker configurations...');
     await prisma.workerConfig.upsert({
-        where: { workerConfigId: 'generic-bull-worker' },
+        where: { workerConfigId: 'bull-worker' },
         update: {},
         create: {
             workerConfigId: 'bull-worker',

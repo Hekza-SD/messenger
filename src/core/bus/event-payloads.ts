@@ -1,27 +1,37 @@
-import { ProviderChannelResult } from '../../providers/email/provider.interface';
+import { ProviderChannelResult } from '../../providers/abstract-provider';
 import { EventNames } from './event-names';
 
 export type EventPayloads = {
+    /** -------------------- WORKER -------------------- */
     [EventNames.WorkerDisconnected]: { workerId: string };
+
     [EventNames.WorkerMessageReceived]: {
         workerId: string;
         workerClass: string;
         message: any;
     };
-    [EventNames.WorkerConnected]: { workerConfig: any; workerId: string };
-    [EventNames.WorkerSubscribed]: { workerConfig: any; workerId: string };
+    [EventNames.WorkerConnected]: {
+        workerConfig: Record<string, any>;
+        workerId: string;
+    };
+    [EventNames.WorkerSubscribed]: {
+        workerConfig: Record<string, any>;
+        workerId: string;
+    };
     [EventNames.WorkerMessageProcessed]: {
         workerId: string;
         durationMs: number;
-        correlationId: string;
     };
 
-    [EventNames.ScenarioBeforeExecute]: { scenarioId: string; data: any };
+    /** -------------------- SCENARIO -------------------- */
+    [EventNames.ScenarioBeforeExecute]: { scenarioId: string; inputData: any };
     [EventNames.ScenarioAfterExecute]: {
         scenarioId: string;
         durationMs: number;
         result: any;
     };
+
+    /** -------------------- TEMPLATE -------------------- */
 
     [EventNames.TemplateBeforeExecute]: { templateId: string; data: any };
     [EventNames.TemplateAfterExecute]: { templateId: string; result: any };
@@ -41,6 +51,7 @@ export type EventPayloads = {
     };
     [EventNames.TemplateRenderError]: { templateId: string; error: Error };
 
+    /** -------------------- PROVIDER -------------------- */
     [EventNames.ProviderSendStart]: { providerId: string; payload: any };
     [EventNames.ProviderSendEnd]: { providerId: string; results: any[] };
     [EventNames.ProviderBeforeSend]: { providerId: string; payload: any };
@@ -50,5 +61,6 @@ export type EventPayloads = {
     };
     [EventNames.ProviderError]: { providerId: string; error: Error };
 
+    /** -------------------- SYSTEM -------------------- */
     [EventNames.SystemError]: { error: Error };
 };

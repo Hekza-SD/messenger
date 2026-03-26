@@ -1,4 +1,4 @@
-import { SupportedChannel } from "../../config";
+import { SupportedChannel } from '@prisma/client';
 
 export interface ProviderExecutionContext {
     // ---- Routing / identification ----
@@ -10,6 +10,8 @@ export interface ProviderExecutionContext {
     bcc?: string[];
     subject: string; // override si besoin
     body: string; // override si besoin
+    from: string; // override si besoin
+    headers?: Record<string, string>; // custom headers if supported by provider/channel
     channels: SupportedChannel[]; // channels to use (email, sms, push, webhook…)
 
     // ---- Meta control ----

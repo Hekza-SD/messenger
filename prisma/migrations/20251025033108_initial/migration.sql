@@ -26,7 +26,7 @@ CREATE TYPE "MetricSource" AS ENUM ('worker', 'scenario', 'template', 'provider'
 CREATE TYPE "MetricSeverity" AS ENUM ('info', 'warning', 'error');
 
 -- CreateEnum
-CREATE TYPE "MetricCategory" AS ENUM ('performance', 'system', 'business');
+CREATE TYPE "MetricCategory" AS ENUM ('performance', 'system', 'business', 'delivery', 'error');
 
 -- CreateTable
 CREATE TABLE "QueueConfig" (
@@ -74,7 +74,7 @@ CREATE TABLE "Provider" (
     "description" TEXT,
     "options" JSONB,
     "supportedChannels" "SupportedChannel"[],
-    "defaultFrom" TEXT,
+    "from" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

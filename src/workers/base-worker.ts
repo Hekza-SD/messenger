@@ -66,7 +66,6 @@ export abstract class BaseWorker<
         bus.emit(EventNames.WorkerMessageProcessed, {
             workerId: this.id,
             durationMs: duration,
-            correlationId,
         });
     }
 

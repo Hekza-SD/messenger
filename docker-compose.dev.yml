@@ -1,4 +1,18 @@
 services:
+  # --- PostgreSQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: messenger
+      POSTGRES_PASSWORD: messenger
+      POSTGRES_DB: messenger
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   # --- Redis instance used by BullMQ ---
   redis:
     image: redis:7-alpine
@@ -24,4 +38,5 @@ services:
     # You can access it at http://localhost:5540
 
 volumes:
+  postgres-data:
   redis-data:

@@ -1,4 +1,4 @@
-import { AbstractProvider } from '../../providers/email/provider.interface';
+import { AbstractProvider } from '../../providers/abstract-provider';
 import { ProviderFactory } from '../../providers/provider-factory';
 import pinoLogger from '../../logger';
 import { Provider, SupportedChannel } from '@prisma/client';

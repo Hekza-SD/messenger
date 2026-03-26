@@ -1,0 +1,279 @@
+# Messenger — Contexte projet & Review d'architecture
+
+## Vue d'ensemble
+
+Messenger est un système d'envoi de messages multi-canaux (email, SMS, push, webhook) basé sur BullMQ/Redis. Il consomme des messages depuis des queues, résout le scénario + templates associés, applique des transformations de données, rend les templates Handlebars, puis envoie via le provider configuré. Un client SDK autonome (`packages/messenger-client`) permet aux applications clientes d'enqueuer des messages.
+
+---
+
+## Architecture actuelle
+
+```
+MessengerClient (SDK) ──enqueue──▶ Redis/BullMQ Queue
+                                        │
+                                        ▼
+                              GenericBullWorker (consume)
+                                        │
+                                        ▼
+                              ScenarioService.execute()
+                                        │
+                              ┌─────────┴──────────┐
+                              ▼                    ▼
+                     TemplateService (1)    TemplateService (N)
+                         │                     │
+                    Transform ──▶ Render ──▶ Provider.send()
+```
+
+### Stack technique
+
+- **Runtime** : Node.js + TypeScript
+- **Queue** : BullMQ + Redis (ioredis)
+- **ORM** : Prisma (PostgreSQL)
+- **Templates** : Handlebars
+- **Validation** : Zod (worker/queue options), class-validator (API DTOs)
+- **Logging** : Pino + pino-pretty (dev)
+- **API** : Express 5 (actuellement commenté/désactivé, uniquement `/api/health`)
+- **SDK Client** : Package indépendant (`packages/messenger-client`) publié sous `@techspear/messenger-client`
+
+### Patterns utilisés
+
+- **Singleton** : `MessengerApp`, `RedisManager`, `Server`, `ErrorHandlerService`
+- **Factory** : `WorkerFactory`, `ProviderFactory`
+- **Strategy** : `AbstractProvider` → `MockProvider`, `SendGridProvider`, `GmailProvider`
+- **Template Method** : `BaseWorker` → `GenericBullWorker`
+- **Observer/Event-Driven** : `EventBus<EventPayloads>` typé (événements lifecycle)
+- **Plugin** : `PluginManager` avec `LoggerPlugin` et `MetricsPlugin`
+- **AsyncLocalStorage** : Contexte par corrélation ID (tracing)
+- **Builder** : `MessageBuilder` (client SDK)
+
+---
+
+## Modèle de données (Prisma)
+
+- `QueueConfig` : Config Redis (queueId, options JSON contenant redisUrl)
+- `Worker` : Définition d'implémentation worker (workerId)
+- `WorkerConfig` : Instance concrète d'un worker (lie Worker + QueueConfig, concurrency, options JSON)
+- `Provider` : Config provider (providerId, from, supportedChannels, options JSON)
+- `Application` : App cliente (appId)
+- `Scenario` : Workflow de messaging (scenarioId)
+- `ApplicationScenario` : Relation N:N Application↔Scenario
+- `Template` : Config template (templateId, providerId, path, channels, dataTransformFiles)
+- `ScenarioTemplate` : Relation N:N Scenario↔Template (order, enabled)
+- `Metric` : Métriques enregistrées par le MetricsPlugin
+
+---
+
+## REVIEW — Problèmes identifiés & Recommandations
+
+> Les problèmes marqués ✅ ont été corrigés.
+
+### 🔴 Critiques (bugs / problèmes d'architecture)
+
+#### ✅ 1. ProviderFactory/WorkerFactory instanciaient TOUS les providers/workers
+
+Corrigé : pattern registre `Map<id, Constructor>`, seul le bon est instancié.
+
+#### ✅ 2. GmailProvider : `initTransporter()` jamais appelé
+
+Corrigé : `super(provider, GmailProviderOptionsSchema)` + `this.initTransporter()` dans le constructeur.
+
+#### ✅ 3. RedisManager importait le service API au lieu du service core
+
+Corrigé : utilise `QueueService` (core) directement.
+
+#### ✅ 4. BullMQProducer fermait la connexion poolée
+
+Corrigé : supprimé `connection.quit()` après `queue.close()`.
+
+#### ✅ 5. WorkerService.getCachedWorkerInstance — message d'erreur disait "Provider"
+
+Corrigé : dit "Worker" maintenant.
+
+#### ✅ 6. GenericBullWorker — extraction manuelle fragile des options Redis
+
+Corrigé : utilise `this.connection.duplicate()` au lieu de reconstruire les options manuellement.
+
+#### ✅ 7. Seed worker-configs : workerConfigId incohérent entre where et create
+
+Corrigé : `where` et `create` utilisent maintenant le même `workerConfigId: 'bull-worker'`.
+
+#### ✅ 8. Subject fallback utilisait bodyOverride au lieu de subject
+
+Corrigé : `ctx.subject || rendered.subject || 'Empty subject'`.
+
+#### ✅ 9. validate-dto.ts — le map des erreurs n'avait pas de return
+
+Corrigé : retourne `{ property, constraints }` + `return` après `next(error)`.
+
+#### ✅ 10. AbstractProvider — message d'erreur disait "workerConfig" au lieu de "providerConfig"
+
+Corrigé.
+
+#### ✅ 11. Pas de SIGTERM handler
+
+Corrigé : ajouté `process.on('SIGTERM', shutdownHandler)` à côté de SIGINT.
+
+#### ✅ 12. package.json — dépendances mal classées
+
+Corrigé : `express` → dependencies, `@types/pino` → devDependencies, supprimé `crypto`, `fs`, `faker`.
+
+#### ✅ 13. Path traversal dans le chargement dynamique de transforms
+
+Corrigé : validation que le path ne contient pas `..` et n'est pas absolu.
+
+#### ✅ 14. Pas de graceful shutdown pour Redis/Prisma
+
+Corrigé : `RedisManager.closeAll()` + `prisma.$disconnect()` dans `MessengerApp.shutdown()`.
+
+### 🟡 Améliorations restantes (non corrigées)
+
+#### TemplateRenderer : cache sans invalidation
+
+Le cache Handlebars ne se vide jamais. OK en production, mais en dev avec hot-reload ça peut surprendre. Envisager un TTL ou un flag pour désactiver en dev.
+
+#### Validation du QueueMessage incomplète
+
+`isValidQueueMessage` ne valide pas `scenarioId` ni `businessData`. Utiliser un schema Zod pour le message entrant.
+
+#### MetricsPlugin écrit en DB dans un handler synchrone
+
+L'EventBus n'attend pas les promises → erreurs silencieuses. Écrire en DB à chaque événement crée un overhead. Envisager un buffer/batch ou un système dédié (Prometheus).
+
+#### Duplication du type QueueMessage
+
+`QueueMessage` est défini dans `src/core/entities/queue-message.ts` ET `packages/messenger-client/src/types.ts`. Risque de divergence.
+
+### 🔵 Messenger-client SDK — Corrections appliquées
+
+#### ✅ 15. `delivery.channels` → `delivery.channel` (aligné avec le serveur)
+
+Le serveur utilise `delivery.channel` (singulier, array). Le client avait `delivery.channels` dans `buildQueueMessage`. Corrigé partout (types.ts, messenger-client.ts).
+
+#### ✅ 16. Zod schema `to`/`cc`/`bcc` trop restrictif (`.email()`)
+
+Les destinataires peuvent être des numéros de téléphone ou des push tokens, pas seulement des emails. Changé en `.string().min(1)`.
+
+#### ✅ 17. `generateMessageId()` utilisait `Math.random()` — peu sûr
+
+Remplacé par `crypto.randomUUID()`.
+
+#### ✅ 18. `messengerClient` typé `any` dans `MessageBuilder`
+
+Ajouté `import type { MessengerClient }` et typé correctement.
+
+#### ✅ 19. `createMessage()` retournait `any`
+
+Typé `MessageBuilder` en retour.
+
+#### ✅ 20. `MessengerUtils` — `channel: 'email'` au lieu de `channel: ['email']`
+
+Le type `delivery.channel` est `string[]`. Les helpers `createDevConfig` et `createProdConfig` passaient un string simple. Corrigé en array.
+
+#### ✅ 21. `buildQueueMessage` — spread order inversé (defaults écrasaient le message)
+
+L'objet `meta`/`delivery` faisait `...this.config.defaults?.delivery` APRÈS les valeurs du message, les écrasant. Corrigé : defaults sont spread en premier, puis les valeurs message-specific les overrident.
+
+#### ✅ 22. Pas de validation Zod dans `sendMessage()`
+
+Les schemas Zod (`SimpleMessageDataSchema`, `validateMessageData`) étaient définis mais jamais appelés. Ajouté `validateMessageData(messageData)` au début de `sendMessage()`.
+
+#### ✅ 23. Dynamic `require()` pour `MessageBuilder`
+
+Remplacé par un import ESM standard en haut du fichier.
+
+### 🟢 Suggestions d'architecture (non bloquantes)
+
+#### L'architecture multi-workers BullMQ est correcte ✅
+
+Pattern standard, scale horizontalement. Points d'amélioration :
+
+- Rate limiting BullMQ (`limiter: { max: N, duration: ms }`)
+- Health check worker
+- Dead letter queue (DLQ) pour les messages qui échouent après N retries
+- Les retry policies de `QueueMessage.delivery.retryPolicy` ne sont pas implémentées côté worker
+
+#### EventBus synchrone — risque si un listener throw
+
+Considérer un try/catch dans `emit` ou un bus async (le MetricsPlugin fait du I/O).
+
+#### L'API Express est désactivée
+
+`apiBootstrap()` est commenté. Quand elle sera réactivée, gérer les deux modes (worker + API).
+
+---
+
+## Structure des fichiers clés
+
+```
+src/
+├── index.ts                      # Entry point — bootstrap MessengerApp
+├── app.ts                        # MessengerApp singleton (init providers + workers)
+├── logger.ts                     # Pino logger (file + pretty console)
+├── prisma.ts                     # PrismaClient singleton
+├── config/
+│   ├── index.ts                  # dotenv + config object
+│   └── types.ts                  # Base*Options interfaces (générique JSON)
+├── core/
+│   ├── context.ts                # AsyncLocalStorage (correlationId, logger)
+│   ├── bus/                      # EventBus typé (EventNames enum + EventPayloads)
+│   ├── entities/                 # QueueMessage, TemplateExecutionCtx, ProviderExecutionCtx
+│   ├── plugins/                  # Plugin system (LoggerPlugin, MetricsPlugin)
+│   ├── queues/                   # RedisManager (pool), BullMQProducer
+│   └── services/                 # ApplicationService, ScenarioService, TemplateService,
+│                                 # TemplateRenderer, ProviderService, WorkerService, QueueService
+├── providers/
+│   ├── abstract-provider.ts      # Base class (send avec routing multi-channel)
+│   ├── mock-provider.ts          # Dev/test provider
+│   ├── sendgrid-provider.ts      # SendGrid email
+│   ├── gmail-provider.ts         # Gmail via nodemailer
+│   └── provider-factory.ts       # Factory (registre Map<id, Constructor>)
+├── workers/
+│   ├── base-worker.ts            # Template method (connect/subscribe/processMessage)
+│   ├── generic-bullmq-worker.ts  # BullMQ consumer implementation
+│   ├── worker-factory.ts         # Factory (registre Map<id, Constructor>)
+│   └── worker.interface.ts       # Interface Worker (non utilisée par BaseWorker)
+├── transforms/                   # Data transforms (chargés dynamiquement par path)
+├── templates/                    # Handlebars templates (subject.hbs + body.hbs)
+└── api/                          # Express API (actuellement désactivée)
+    ├── server.ts                 # Express singleton
+    ├── routers/base.router.ts    # Seule route : /health
+    ├── services/                 # queue.service (utilisé par RedisManager ⚠️)
+    ├── dto/                      # DTO validation (class-validator)
+    ├── errors/                   # CustomError hierarchy
+    └── middlewares/              # error-handler, cors, morgan
+
+packages/messenger-client/        # SDK client autonome
+├── src/
+│   ├── messenger-client.ts       # MessengerClient (fluent API, events)
+│   ├── message-builder.ts        # MessageBuilder (builder pattern)
+│   ├── queue-manager.ts          # RedisConnectionManager + MessageProducer
+│   └── types.ts                  # Types standalone (⚠️ dupliqués avec le serveur)
+```
+
+---
+
+## Conventions de code
+
+- Services : classes statiques (pas d'instanciation) sauf API services
+- Logger : `pinoLogger` global ou `contextLogger` (avec correlationId via AsyncLocalStorage)
+- Validation options : Zod schemas pour les JSON `options` de Worker/Queue/Provider
+- Validation API : class-validator + class-transformer (DTOs)
+- Events : enum `EventNames` + type map `EventPayloads`
+- Prisma : entités avec `id` auto-increment + string unique ID (ex: `providerId`, `queueId`)
+- Seeds : séparés par environnement (base / dev / prod)
+
+## Commandes
+
+```bash
+npm run dev          # nodemon (ts-node)
+npm run build        # tsc
+npm run start        # node dist/index.js
+npm run seed         # ts-node prisma/seed.ts
+npm run format       # prettier
+```
+
+## Prérequis
+
+- Node.js
+- PostgreSQL (Prisma)
+- Redis (BullMQ) — docker-compose.dev.yml fournit Redis + RedisInsight

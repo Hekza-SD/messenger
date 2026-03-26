@@ -5,9 +5,9 @@ export async function seedTemplates(prisma: PrismaClient) {
     const templates = [
         {
             templateId: 'mqr_user_welcome',
-            providerId: 'mock-multi-provider',
+            providerId: 'sendgrid-provider',
             path: 'generic_user_welcome',
-            channels: [SupportedChannel.email, SupportedChannel.sms],
+            channels: [SupportedChannel.email],
         },
         {
             templateId: 'mqr_confirmation_email',

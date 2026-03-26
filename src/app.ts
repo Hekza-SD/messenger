@@ -4,7 +4,9 @@ import { MetricsPlugin } from './core/plugins/metrics-plugin';
 import { PluginManager } from './core/plugins/plugin-manager';
 import { ProviderService } from './core/services/provider.service';
 import { WorkerService } from './core/services/worker.service';
+import { RedisManager } from './core/queues/redis-connection';
 import pinoLogger from './logger';
+import prisma from './prisma';
 
 export class MessengerApp {
     private static instance: MessengerApp;
@@ -38,5 +40,7 @@ export class MessengerApp {
 
     async shutdown() {
         await WorkerService.disconnectAll();
+        RedisManager.getInstance().closeAll();
+        await prisma.$disconnect();
     }
 }

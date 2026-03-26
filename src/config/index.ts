@@ -11,4 +11,6 @@ export const config = {
     transformsDir: process.env.TRANSFORMS_DIR || './transforms',
     templateDir: process.env.TEMPLATE_DIR || './templates',
     apiBaseUri: process.env.API_BASE_URI || '/api',
+
+    sendgridApiKey: process.env.SENDGRID_API_KEY,
 };

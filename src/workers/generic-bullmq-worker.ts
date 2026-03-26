@@ -69,19 +69,11 @@ export class GenericBullWorker extends BaseWorker<BullWorkerOptions> {
             `[GenericBullWorker] Initializing BullMQ worker for queue: ${this.workerConfig.queueId}`,
         );
 
-        const connectionOptions = {
-            host: (this.connection as any).options.host,
-            port: (this.connection as any).options.port,
-            password: (this.connection as any).options.password,
-            maxRetriesPerRequest: null,
-            enableReadyCheck: false,
-        };
-
         this.worker = new BullWorker(
             this.workerConfig.options.topic,
             async (job) => await this.handleMessage(job.data),
             {
-                connection: connectionOptions,
+                connection: this.connection!.duplicate(),
                 concurrency: this.workerConfig.concurrency ?? 1,
             },
         );

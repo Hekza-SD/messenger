@@ -30,7 +30,7 @@ export class ScenarioService {
     static async execute(message: QueueMessage): Promise<void> {
         bus.emit(EventNames.ScenarioBeforeExecute, {
             scenarioId: message.scenarioId,
-            data: message,
+            inputData: message,
         });
         const startTime = Date.now();
 
@@ -63,11 +63,10 @@ export class ScenarioService {
                     tracking: message.tracking,
                 });
             } catch (err) {
-                contextLogger.error('Template execution failed for scenario ', {
-                    err,
-                    templateId,
-                    scenarioId: message.scenarioId,
-                });
+                contextLogger.error(
+                    `Template execution failed for scenario ${message.scenarioId}`,
+                    { err, templateId, scenarioId: message.scenarioId },
+                );
             }
         }
         bus.emit(EventNames.ScenarioAfterExecute, {

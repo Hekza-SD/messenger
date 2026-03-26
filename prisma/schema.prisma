@@ -1,6 +1,5 @@
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -89,7 +88,7 @@ model Provider {
   description       String?
   options           Json?
   supportedChannels SupportedChannel[]
-  defaultFrom       String?
+  from              String
 
   // providerExecutions ProviderExecution[]
 

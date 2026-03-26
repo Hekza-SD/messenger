@@ -28,9 +28,9 @@ export class WorkerService {
     }
 
     static getCachedWorkerInstance(workerConfigId: string): BaseWorker {
-        const provider = this.workers.get(workerConfigId);
-        if (!provider) throw new Error(`Provider ${workerConfigId} not found`);
-        return provider;
+        const worker = this.workers.get(workerConfigId);
+        if (!worker) throw new Error(`Worker ${workerConfigId} not found`);
+        return worker;
     }
 
     static async disconnectAll() {

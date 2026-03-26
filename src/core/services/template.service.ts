@@ -1,7 +1,8 @@
 import { SupportedChannel, Template } from '@prisma/client';
+import path from 'path';
 import { config } from '../../config';
 import prisma from '../../prisma';
-import { AbstractProvider } from '../../providers/email/provider.interface';
+import { AbstractProvider } from '../../providers/abstract-provider';
 
 import { DataTransform } from '../../transforms/transform.type';
 import { bus } from '../bus';
@@ -102,8 +103,8 @@ export class TemplateService {
 
         const rendered = await TemplateRenderer.render(template.path, data);
 
-        const subject = rendered.subject || ctx.bodyOverride || 'Empty subject';
-        const body = rendered.body || ctx.bodyOverride || 'Empty body';
+        const subject = ctx.subject || rendered.subject || 'Empty subject';
+        const body = ctx.bodyOverride || rendered.body || 'Empty body';
 
         bus.emit(EventNames.TemplateAfterRender, {
             templateId: template.templateId,
@@ -135,6 +136,7 @@ export class TemplateService {
             cc: ctx.cc,
             bcc: ctx.bcc,
             body: rendered.body,
+            from: provider.from,
             channels: channels,
             subject: rendered.subject,
             meta: ctx.meta,
@@ -157,7 +159,13 @@ export class TemplateService {
         }
 
         for (const file of template.dataTransformFiles) {
-            const modulePath = `${config.transformsDir}/${file}`;
+            if (file.includes('..') || path.isAbsolute(file)) {
+                throw new Error(
+                    `Invalid transform path "${file}" for template ${template.templateId}: path traversal not allowed`,
+                );
+            }
+
+            const modulePath = path.resolve(config.transformsDir, file);
             const mod = await import(modulePath);
             const transform: DataTransform = mod.default;
 

@@ -5,3 +5,7 @@ export interface BaseQueueOptions {
 export interface BaseWorkerOptions {
     [key: string]: any;
 }
+
+export interface BaseProviderOptions {
+    [key: string]: any;
+}

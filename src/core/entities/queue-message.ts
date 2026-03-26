@@ -20,13 +20,13 @@ export interface QueueMessage {
         locale?: string; // choix de langue du template
         correlationId?: string; // pour tracer un flot complet
         tags?: string[];
-        createdAt?: string; // ISO8601 (ajout automatique à l’entrée queue)
+        createdAt?: string; // ISO8601
         expiresAt?: string; // pour expirer le message si pas traité à temps
     };
 
     // ---- Delivery options ----
     delivery?: {
-        channel: 'email' | 'sms' | 'push' | 'webhook';
+        channel?: ('email' | 'sms' | 'push' | 'webhook')[];
         retryPolicy?: {
             maxRetries: number;
             backoff: 'fixed' | 'linear' | 'exponential';

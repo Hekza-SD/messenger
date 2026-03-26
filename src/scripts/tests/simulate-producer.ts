@@ -12,7 +12,7 @@ async function main() {
         },
         to: ['recipient@example.com'],
     };
-    await BullMQProducer.enqueue(data, 'messenger-queue', 'msg');
+    await BullMQProducer.enqueue(data, 'messenger-queue', 'messenger');
 
     console.log('Message enqueued successfully');
 }

@@ -1,6 +1,6 @@
-import { ProviderExecutionContext } from '../../core/entities/provider-execution-ctx';
-import { contextLogger } from '../../core/context';
-import { AbstractProvider } from './provider.interface';
+import { ProviderExecutionContext } from '../core/entities/provider-execution-ctx';
+import { contextLogger } from '../core/context';
+import { AbstractProvider } from './abstract-provider';
 import { Provider, SupportedChannel } from '@prisma/client';
 
 export class MockProvider extends AbstractProvider {

@@ -1,5 +1,4 @@
 import IORedis from 'ioredis';
-import { queueService } from '../../api/services/queue.service';
 import { QueueService } from '../services/queue.service';
 import z from 'zod';
 import { BaseQueueOptions } from '../../config';
@@ -27,7 +26,7 @@ export class RedisManager {
     }
 
     async getConnection(queueId: string): Promise<IORedis> {
-        const queue = await queueService.getByQueueId(queueId);
+        const queue = await QueueService.getByQueueId(queueId);
 
         if (!queue) {
             throw new Error(`Queue with ID ${queueId} not found`);
@@ -53,6 +52,13 @@ export class RedisManager {
     closeConnection(queueId: string): void {
         const connection = this.redisConnections.get(queueId);
         if (connection) {
+            connection.quit();
+            this.redisConnections.delete(queueId);
+        }
+    }
+
+    closeAll(): void {
+        for (const [queueId, connection] of this.redisConnections) {
             connection.quit();
             this.redisConnections.delete(queueId);
         }

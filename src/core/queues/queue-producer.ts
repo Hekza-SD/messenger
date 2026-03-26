@@ -9,6 +9,5 @@ export class BullMQProducer {
 
         await queue.add('default', data);
         await queue.close();
-        await connection.quit();
     }
 }
